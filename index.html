@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en" class="dark"> <!-- Default to Dark Mode -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Dashboard</title>
+    
+    <!-- Tailwind CSS and Configuration -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // Class-based dark mode
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .dark .custom-scroll::-webkit-scrollbar-thumb { background-color: #475569; }
+        
+        /* Loading Animation */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); }
+            80%, 100% { opacity: 0; }
+        }
+        .pulse-ring {
+            position: absolute;
+            animation: pulse-ring 1.25s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-100 h-screen overflow-hidden flex transition-colors duration-300">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="w-80 bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700 border-r flex flex-col z-20 shadow-xl hidden md:flex transition-colors duration-300">
+        <!-- Logo Area -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-700">
+            <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                Crypto Dashboard
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">Professional Market Analysis</p>
+        </div>
+
+        <!-- Coin List -->
+        <div class="flex-1 overflow-y-auto custom-scroll p-3 space-y-2">
+            {% for coin in coins %}
+            <button 
+                onclick="handleCoinClick(this)"
+                data-id="{{ coin.id }}"
+                data-name="{{ coin.name }}"
+                data-symbol="{{ coin.symbol|upper }}"
+                data-image="{{ coin.image }}"
+                data-price="{{ coin.current_price or 0 }}"
+                data-change="{{ coin.price_change_percentage_24h or 0 }}"
+                id="btn-{{ coin.id }}"
+                class="coin-btn w-full p-3 flex items-center gap-3 rounded-xl transition-all border border-transparent group text-left
+                       hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-200 dark:hover:border-slate-600"
+            >
+                <img src="{{ coin.image }}" alt="{{ coin.name }}" class="w-8 h-8 rounded-full shadow-sm group-hover:scale-110 transition-transform bg-white dark:bg-slate-200 p-0.5">
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-center">
+                        <span class="font-semibold text-slate-700 dark:text-slate-200 truncate">{{ coin.name }}</span>
+                        <span class="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ coin.symbol|upper }}</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-0.5">
+                        <span class="text-sm text-slate-500 dark:text-slate-400">${{ "{:,.2f}".format(coin.current_price or 0) }}</span>
+                        <span class="text-xs font-medium {{ 'text-green-500 dark:text-green-400' if (coin.price_change_percentage_24h or 0) >= 0 else 'text-red-500 dark:text-red-400' }}">
+                            {{ "%0.2f"|format(coin.price_change_percentage_24h or 0) }}%
+                        </span>
+                    </div>
+                </div>
+            </button>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col min-w-0 h-full relative">
+        
+        <!-- Top Bar (Theme Button Here) -->
+        <div class="absolute top-4 right-4 z-30 flex gap-2">
+            <button onclick="toggleTheme()" class="p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 shadow-lg border border-slate-200 dark:border-slate-700 hover:scale-105 transition-all">
+                <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i> <!-- Show Sun in Dark Mode -->
+                <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i> <!-- Show Moon in Light Mode -->
+            </button>
+        </div>
+
+        <!-- Mobile Header -->
+        <header class="md:hidden bg-white dark:bg-slate-800 p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+            <h1 class="font-bold text-lg text-blue-600 dark:text-blue-400">Crypto Dashboard</h1>
+            <select onchange="handleMobileSelect(this)" class="bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-200 text-sm rounded-lg p-2 outline-none">
+                {% for coin in coins %}
+                    <option value="{{ coin.id }}">{{ coin.name }}</option>
+                {% endfor %}
+            </select>
+        </header>
+
+        <div class="flex-1 p-6 md:p-8 overflow-y-auto">
+            <div class="max-w-5xl mx-auto space-y-6 pt-8 md:pt-0">
+                
+                <!-- Selected Coin Header and Info -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-300">
+                    <div class="flex items-center gap-4">
+                        <div class="relative">
+                            <img id="active-image" src="" alt="Coin" class="w-16 h-16 rounded-full bg-white dark:bg-slate-700 p-1 shadow-md border border-slate-100 dark:border-slate-600">
+                            <div class="pulse-ring absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-500/30"></div>
+                        </div>
+                        <div>
+                            <h2 id="active-name" class="text-3xl font-bold text-slate-800 dark:text-white">Loading...</h2>
+                            <span id="active-symbol" class="text-sm font-semibold text-slate-400 tracking-wider">---</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-8 border-t md:border-t-0 md:border-l border-slate-100 dark:border-slate-700 pt-4 md:pt-0 md:pl-8">
+                        <div>
+                            <p class="text-sm text-slate-400 font-medium mb-1">Current Price</p>
+                            <p id="active-price" class="text-2xl font-bold text-slate-900 dark:text-white">---</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-slate-400 font-medium mb-1">24h Change</p>
+                            <div id="active-change" class="flex items-center gap-1 text-lg font-bold">---</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart Area -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-1 transition-colors duration-300">
+                    <!-- Time Filters -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <span class="w-2 h-6 bg-blue-500 rounded-full"></span>
+                            Price Analysis Chart
+                        </h3>
+                        <div class="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg transition-colors duration-300">
+                            <button onclick="changeTime(1, this)" class="time-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all">24H</button>
+                            <button onclick="changeTime(7, this)" class="time-btn px-4 py-1.5 text-sm font-medium rounded-md bg-white dark:bg-slate-600 text-blue-600 dark:text-white shadow-sm transition-all active">7D</button>
+                            <button onclick="changeTime(30, this)" class="time-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all">30D</button>
+                            <button onclick="changeTime(365, this)" class="time-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all">1Y</button>
+                        </div>
+                    </div>
+
+                    <!-- Canvas -->
+                    <div class="relative h-[400px] w-full p-4">
+                        <canvas id="myChart"></canvas>
+                        <!-- Loading Overlay -->
+                        <div id="loading-overlay" class="absolute inset-0 bg-white/80 dark:bg-slate-800/80 flex items-center justify-center z-10 hidden backdrop-blur-sm transition-opacity rounded-b-xl">
+                            <div class="flex flex-col items-center">
+                                <div class="w-10 h-10 border-4 border-blue-200 dark:border-blue-900 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin"></div>
+                                <p class="text-xs font-semibold text-blue-600 dark:text-blue-400 mt-3">Loading Data...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Load Icons
+        lucide.createIcons();
+
+        let myChart = null;
+        let currentCoinId = '';
+        let currentDays = 7;
+        let coinDataMap = {};
+        
+        // Theme Toggle Function
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            // Redraw chart with new theme colors
+            if (currentCoinId) updateChart();
+        }
+
+        // Remember preference on page load (Default Dark)
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.remove('dark');
+        } else {
+            document.documentElement.classList.add('dark');
+        }
+
+        {% for coin in coins %}
+            coinDataMap['{{ coin.id }}'] = {
+                id: '{{ coin.id }}',
+                name: '{{ coin.name }}',
+                symbol: '{{ coin.symbol|upper }}',
+                image: '{{ coin.image }}',
+                price: parseFloat('{{ coin.current_price or 0 }}'), 
+                change: parseFloat('{{ coin.price_change_percentage_24h or 0 }}')
+            };
+        {% endfor %}
+
+        window.onload = function() {
+            const firstCoinId = Object.keys(coinDataMap)[0];
+            if(firstCoinId) {
+                const c = coinDataMap[firstCoinId];
+                selectCoin(c.id, c.name, c.symbol, c.image, c.price, c.change);
+            }
+        };
+
+        function handleCoinClick(btn) {
+            const d = btn.dataset;
+            selectCoin(d.id, d.name, d.symbol, d.image, parseFloat(d.price), parseFloat(d.change));
+        }
+
+        function selectCoin(id, name, symbol, image, price, change) {
+            currentCoinId = id;
+            
+            document.getElementById('active-name').innerText = name;
+            document.getElementById('active-symbol').innerText = symbol;
+            document.getElementById('active-image').src = image;
+            document.getElementById('active-price').innerText = '$' + price.toLocaleString();
+            
+            const changeEl = document.getElementById('active-change');
+            if (change >= 0) {
+                changeEl.className = 'flex items-center gap-1 text-lg font-bold text-green-500 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-lg transition-colors';
+                changeEl.innerHTML = `↑ ${change.toFixed(2)}%`;
+            } else {
+                changeEl.className = 'flex items-center gap-1 text-lg font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-3 py-1 rounded-lg transition-colors';
+                changeEl.innerHTML = `↓ ${Math.abs(change).toFixed(2)}%`;
+            }
+
+            document.querySelectorAll('.coin-btn').forEach(btn => {
+                // Clear default styles
+                btn.className = 'coin-btn w-full p-3 flex items-center gap-3 rounded-xl transition-all border border-transparent group text-left hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-200 dark:hover:border-slate-600';
+            });
+            const activeBtn = document.getElementById('btn-' + id);
+            if(activeBtn) {
+                // Active style (Compatible with both dark and light modes)
+                activeBtn.className = 'coin-btn w-full p-3 flex items-center gap-3 rounded-xl transition-all border group text-left bg-blue-50 border-blue-200 ring-1 ring-blue-500 dark:bg-blue-900/40 dark:border-blue-700';
+            }
+
+            updateChart();
+        }
+
+        function changeTime(days, btn) {
+            currentDays = days;
+            document.querySelectorAll('.time-btn').forEach(b => {
+                b.className = 'time-btn px-4 py-1.5 text-sm font-medium rounded-md transition-all text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200';
+            });
+            // Active button style
+            btn.className = 'time-btn px-4 py-1.5 text-sm font-medium rounded-md transition-all bg-white dark:bg-slate-600 text-blue-600 dark:text-white shadow-sm';
+            updateChart();
+        }
+
+        async function updateChart() {
+            if (!currentCoinId) return;
+
+            const loader = document.getElementById('loading-overlay');
+            loader.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/get-coin-data?coin=${currentCoinId}&days=${currentDays}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Failed to fetch data: ' + data.error);
+                } else {
+                    renderChart(data.labels, data.prices);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        function renderChart(labels, data) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            const isDark = document.documentElement.classList.contains('dark');
+            
+            if (myChart) myChart.destroy();
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            const isPositive = data[data.length - 1] >= data[0];
+            const color = isPositive ? '59, 130, 246' : '239, 68, 68'; 
+            
+            gradient.addColorStop(0, `rgba(${color}, 0.5)`);
+            gradient.addColorStop(1, `rgba(${color}, 0.0)`);
+
+            // Theme Colors
+            const gridColor = isDark ? '#334155' : '#f1f5f9';
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+            const tooltipBg = isDark ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+            const tooltipText = isDark ? '#f8fafc' : '#1e293b';
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Price (USD)',
+                        data: data,
+                        borderColor: `rgb(${color})`,
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: tooltipBg,
+                            titleColor: tooltipText,
+                            bodyColor: tooltipText,
+                            borderColor: gridColor,
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return '$ ' + context.parsed.y.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 6, color: textColor }
+                        },
+                        y: {
+                            grid: { color: gridColor },
+                            ticks: { color: textColor }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+        
+        function handleMobileSelect(select) {
+            const coin = coinDataMap[select.value];
+            if(coin) selectCoin(coin.id, coin.name, coin.symbol, coin.image, coin.price, coin.change);
+        }
+    </script>
+</body>
+</html>
